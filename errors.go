@@ -11,6 +11,10 @@ import (
 	"strings"
 )
 
+type ErrorCallbackHandler func(err *Error)
+
+var DefaultErrorCallbackHandler ErrorCallbackHandler
+
 type Trace struct {
 	Index    int    `json:"index"`
 	Function string `json:"function,omitempty"`
@@ -61,49 +65,49 @@ func As(err error, target any) bool {
 }
 
 // NewInternal returns an Error with a INTERNAL error code.
-func NewInternal(err error, message, op string) *Error {
-	return newError(err, message, INTERNAL, op)
+func NewInternal(err error, message, op string, disableErrorHandler ...bool) *Error {
+	return newError(err, message, INTERNAL, op, disableErrorHandler...)
 }
 
 // NewConflict returns an Error with a CONFLICT error code.
-func NewConflict(err error, message, op string) *Error {
-	return newError(err, message, CONFLICT, op)
+func NewConflict(err error, message, op string, disableErrorHandler ...bool) *Error {
+	return newError(err, message, CONFLICT, op, disableErrorHandler...)
 }
 
 // NewInvalid returns an Error with a INVALID error code.
-func NewInvalid(err error, message, op string) *Error {
-	return newError(err, message, INVALID, op)
+func NewInvalid(err error, message, op string, disableErrorHandler ...bool) *Error {
+	return newError(err, message, INVALID, op, disableErrorHandler...)
 }
 
 // NewNotFound returns an Error with a NOTFOUND error code.
-func NewNotFound(err error, message, op string) *Error {
-	return newError(err, message, NOTFOUND, op)
+func NewNotFound(err error, message, op string, disableErrorHandler ...bool) *Error {
+	return newError(err, message, NOTFOUND, op, disableErrorHandler...)
 }
 
 // NewUnknown returns an Error with a UNKNOWN error code.
-func NewUnknown(err error, message, op string) *Error {
-	return newError(err, message, UNKNOWN, op)
+func NewUnknown(err error, message, op string, disableErrorHandler ...bool) *Error {
+	return newError(err, message, UNKNOWN, op, disableErrorHandler...)
 }
 
 // NewMaximumAttempts returns an Error with a MAXIMUMATTEMPTS error code.
-func NewMaximumAttempts(err error, message, op string) *Error {
-	return newError(err, message, MAXIMUMATTEMPTS, op)
+func NewMaximumAttempts(err error, message, op string, disableErrorHandler ...bool) *Error {
+	return newError(err, message, MAXIMUMATTEMPTS, op, disableErrorHandler...)
 }
 
 // NewExpired returns an Error with a EXPIRED error code.
-func NewExpired(err error, message, op string) *Error {
-	return newError(err, message, EXPIRED, op)
+func NewExpired(err error, message, op string, disableErrorHandler ...bool) *Error {
+	return newError(err, message, EXPIRED, op, disableErrorHandler...)
 }
 
 // NewE returns an Error with the DefaultCode.
-func NewE(err error, message, op string) *Error {
-	return newError(err, message, DefaultCode, op)
+func NewE(err error, message, op string, disableErrorHandler ...bool) *Error {
+	return newError(err, message, DefaultCode, op, disableErrorHandler...)
 }
 
 // ErrorF returns an Error with the DefaultCode and
 // formatted message arguments.
-func ErrorF(err error, op, format string, args ...any) *Error {
-	return NewE(err, fmt.Sprintf(format, args...), op)
+func ErrorF(err error, op, format string, disableErrorHandler bool, args ...any) *Error {
+	return NewE(err, fmt.Sprintf(format, args...), op, disableErrorHandler)
 }
 
 // Wrap returns an error annotating err with a stack trace
@@ -113,12 +117,12 @@ func Wrap(err error, message, op string) *Error {
 	if err == nil {
 		return nil
 	}
-	return NewE(err, message, op)
+	return NewE(err, message, op, true)
 }
 
 // newError is an alias for New by creating the pcs
 // file line and constructing the error message.
-func newError(err error, message, code, op string) *Error {
+func newError(err error, message, code, op string, disableErrorHandler ...bool) *Error {
 	_, file, line, _ := runtime.Caller(2)
 	pcs := make([]uintptr, 2)
 	_ = runtime.Callers(2, pcs)
@@ -144,6 +148,9 @@ func newError(err error, message, code, op string) *Error {
 	}
 	if code == INTERNAL {
 		e.Internal = true
+	}
+	if DefaultErrorCallbackHandler != nil && len(disableErrorHandler) > 0 && disableErrorHandler[0] {
+		DefaultErrorCallbackHandler(e)
 	}
 	return e
 }
@@ -177,14 +184,15 @@ var (
 
 // Error defines a standard application error.
 type Error struct {
-	Code       string     `json:"code"`
-	Message    string     `json:"message"`
-	Operation  string     `json:"operation"`
-	Err        error      `json:"error"`
-	Additional StackTrace `json:"additional"`
-	Internal   bool       `json:"internal"`
-	fileLine   string
-	pcs        []uintptr
+	Code          string     `json:"code"`
+	Message       string     `json:"message"`
+	Operation     string     `json:"operation"`
+	Err           error      `json:"error"`
+	Additional    StackTrace `json:"additional"`
+	Internal      bool       `json:"internal"`
+	NotifyHandler bool       `json:"notify_handler"`
+	fileLine      string
+	pcs           []uintptr
 }
 
 // Error returns the string representation of the error
