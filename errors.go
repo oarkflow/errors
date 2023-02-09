@@ -149,7 +149,7 @@ func newError(err error, message, code, op string, disableErrorHandler ...bool) 
 	if code == INTERNAL {
 		e.Internal = true
 	}
-	if DefaultErrorCallbackHandler != nil && len(disableErrorHandler) > 0 && disableErrorHandler[0] {
+	if DefaultErrorCallbackHandler != nil && ((len(disableErrorHandler) > 0 && disableErrorHandler[0]) || len(disableErrorHandler) == 0) {
 		DefaultErrorCallbackHandler(e)
 	}
 	return e
