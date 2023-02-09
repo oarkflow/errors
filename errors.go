@@ -322,7 +322,6 @@ func (e *Error) StackTraceSlice() []string {
 		trace = append(trace, frame.File+":"+line)
 		frame, ok = rFrames.Next()
 	}
-
 	return trace
 }
 
