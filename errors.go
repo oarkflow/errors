@@ -2,6 +2,7 @@ package errors
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -67,6 +68,14 @@ func As(err error, target any) bool {
 // NewInternal returns an Error with a INTERNAL error code.
 func NewInternal(err error, message, op string, disableErrorHandler ...bool) *Error {
 	return newError(err, message, INTERNAL, op, disableErrorHandler...)
+}
+
+// WithContext returns an Error with a INTERNAL error code.
+func WithContext(ctx context.Context, err error, message, errorType, op string, disableErrorHandler ...bool) *Error {
+	if errorType == "" {
+		errorType = DefaultCode
+	}
+	return newErrorWithContext(ctx, err, message, errorType, op, disableErrorHandler...)
 }
 
 // NewConflict returns an Error with a CONFLICT error code.
@@ -155,6 +164,42 @@ func newError(err error, message, code, op string, disableErrorHandler ...bool) 
 	return e
 }
 
+// newErrorWithContext is an alias for New by creating the pcs
+// file line and constructing the error message.
+func newErrorWithContext(ctx context.Context, err error, message, code, op string, disableErrorHandler ...bool) *Error {
+	_, file, line, _ := runtime.Caller(2)
+	pcs := make([]uintptr, 2)
+	_ = runtime.Callers(2, pcs)
+	var stackTrace StackTrace
+	for i, pc := range pcs {
+		p := runtime.FuncForPC(pc)
+		f, l := p.FileLine(pc)
+		stackTrace = append(stackTrace, Trace{
+			Index:    i,
+			Function: p.Name(),
+			File:     f,
+			Line:     l,
+		})
+	}
+	e := &Error{
+		Context:    ctx,
+		Code:       code,
+		Message:    message,
+		Operation:  op,
+		Err:        err,
+		Additional: stackTrace,
+		fileLine:   file + ":" + strconv.Itoa(line),
+		pcs:        pcs,
+	}
+	if code == INTERNAL {
+		e.Internal = true
+	}
+	if DefaultErrorCallbackHandler != nil && ((len(disableErrorHandler) > 0 && disableErrorHandler[0]) || len(disableErrorHandler) == 0) {
+		DefaultErrorCallbackHandler(e)
+	}
+	return e
+}
+
 // Application error codes.
 const (
 	// CONFLICT - An action cannot be performed.
@@ -191,6 +236,7 @@ type Error struct {
 	Additional    StackTrace `json:"additional"`
 	Internal      bool       `json:"internal"`
 	NotifyHandler bool       `json:"notify_handler"`
+	Context       context.Context
 	fileLine      string
 	pcs           []uintptr
 }
